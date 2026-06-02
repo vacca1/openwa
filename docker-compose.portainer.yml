@@ -1,0 +1,79 @@
+# OpenWA — standalone WhatsApp API + Dashboard
+# Adapted for the smarts.solutions VPS: routed by the shared Traefik,
+# HTTPS via Let's Encrypt (leresolver), no internal Traefik, SQLite.
+#
+# Deploy in Portainer via Stacks → Add stack → Repository:
+#   Repository URL:  https://github.com/vacca1/openwa
+#   Compose path:    docker-compose.portainer.yml
+#   Env var:         API_MASTER_KEY=<your strong key>
+#
+# After deploy, connect the Traefik container to the `openwa_net` network.
+# Dashboard: https://openwa.smarts.solutions  (login with API_MASTER_KEY)
+# API:       https://openwa.smarts.solutions/api  (header X-API-Key)
+
+services:
+  # ===== OpenWA backend API (prebuilt public image) =====
+  openwa:
+    image: ghcr.io/rmyndharis/openwa:0.1.6
+    container_name: openwa-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "2785"
+      LOG_LEVEL: info
+      # Database — SQLite (no external DB needed)
+      DATABASE_TYPE: sqlite
+      DATABASE_NAME: /app/data/openwa.sqlite
+      # WhatsApp engine
+      ENGINE_TYPE: whatsapp-web.js
+      SESSION_DATA_PATH: /app/data/sessions
+      PUPPETEER_HEADLESS: "true"
+      PUPPETEER_ARGS: "--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu"
+      # Storage — local disk
+      STORAGE_TYPE: local
+      STORAGE_LOCAL_PATH: /app/data/media
+      # Plugins
+      PLUGINS_ENABLED: "true"
+      PLUGINS_DIR: /app/data/plugins
+      # Security — master key (set as a stack env var in Portainer)
+      API_MASTER_KEY: ${API_MASTER_KEY}
+    volumes:
+      - openwa_data:/app/data
+    expose:
+      - "2785"
+    networks:
+      - openwa_net
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:2785/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ===== Dashboard (built from ./dashboard; nginx proxies /api + /socket.io → openwa:2785) =====
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: openwa-dashboard
+    restart: unless-stopped
+    depends_on:
+      - openwa
+    expose:
+      - "80"
+    networks:
+      - openwa_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.openwa.rule=Host(`openwa.smarts.solutions`)"
+      - "traefik.http.routers.openwa.entrypoints=websecure"
+      - "traefik.http.routers.openwa.tls.certresolver=leresolver"
+      - "traefik.http.services.openwa.loadbalancer.server.port=80"
+
+volumes:
+  openwa_data:
+
+networks:
+  openwa_net:
+    name: openwa_net
+    driver: bridge
