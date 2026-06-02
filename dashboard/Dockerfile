@@ -7,8 +7,10 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies — `npm install` (not `npm ci`) so the correct
+# platform-specific optional deps (rollup/esbuild linux binaries) are
+# resolved even though the committed lockfile was generated on macOS.
+RUN npm install --no-audit --no-fund
 
 # Copy source code
 COPY . .
