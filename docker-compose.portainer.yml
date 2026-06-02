@@ -14,7 +14,7 @@
 services:
   # ===== OpenWA backend API (prebuilt public image) =====
   openwa:
-    image: ghcr.io/rmyndharis/openwa:0.1.6
+    image: ghcr.io/rmyndharis/openwa:latest
     container_name: openwa-api
     restart: unless-stopped
     environment:
