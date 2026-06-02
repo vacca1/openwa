@@ -1,4 +1,6 @@
-FROM node:20-alpine AS builder
+# Debian (glibc) base — avoids Alpine/musl issues with rollup & esbuild
+# optional native binaries that break `npm ci` on node:*-alpine.
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
 
